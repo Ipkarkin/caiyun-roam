@@ -10,7 +10,7 @@ blueprint:
     config itself stays pure ASCII on purpose.
   domain: automation
   author: talosip
-  source_url: "https://github.com/talosip/caiyun-roam"
+  source_url: "https://github.com/Ipkarkin/caiyun-roam"
   homeassistant:
     min_version: 2024.6.0
   input:
