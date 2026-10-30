@@ -1,0 +1,186 @@
+blueprint:
+  name: "Caiyun Weather Push (per person)"
+  description: >-
+    Push Caiyun rain, rain-probability and severe-weather alerts to ONE person.
+    Reads the home weather entity while the presence sensor is on, and the
+    roaming (phone GPS) weather entity when away. Edge-triggered: it remembers
+    what was last pushed in a helper and stays silent while the situation is
+    unchanged, so one shower produces one notification. Create one instance per
+    family member. All Chinese text comes from Caiyun data at runtime; the saved
+    config itself stays pure ASCII on purpose.
+  domain: automation
+  author: talosip
+  source_url: "https://github.com/talosip/caiyun-roam"
+  homeassistant:
+    min_version: 2024.6.0
+  input:
+    presence_sensor:
+      name: "Presence sensor"
+      description: "binary_sensor that is on when this person is at home."
+      selector:
+        entity:
+          domain: binary_sensor
+    home_weather:
+      name: "Home weather entity"
+      description: "Caiyun weather entity using the home coordinates."
+      selector:
+        entity:
+          domain: weather
+    away_weather:
+      name: "Away (roaming) weather entity"
+      description: "Caiyun weather entity that follows this person phone GPS."
+      selector:
+        entity:
+          domain: weather
+    notify_service:
+      name: "Notify service"
+      description: "Where the push goes, e.g. notify.mobile_app_talos"
+      selector:
+        action: {}
+    signature_helper:
+      name: "Memory helper (input_text)"
+      description: >-
+        Per-person text helper that remembers the last pushed situation.
+        Create one per person, e.g. input_text.caiyun_sig_talos
+      selector:
+        entity:
+          domain: input_text
+    prob_threshold:
+      name: "Rain probability threshold (%)"
+      default: 60
+      selector:
+        number:
+          min: 10
+          max: 100
+          step: 5
+          unit_of_measurement: "%"
+    cooldown_minutes:
+      name: "Safety cooldown (minutes)"
+      description: >-
+        Guard against Caiyun data flickering. Keep it small (10-20 min); the
+        edge detection already stops repeats of the same situation.
+      default: 15
+      selector:
+        number:
+          min: 0
+          max: 240
+          step: 5
+    critical_alert:
+      name: "Severe warning breaks through Do Not Disturb"
+      default: true
+      selector:
+        boolean: {}
+
+mode: single
+max_exceeded: silent
+
+triggers:
+  - trigger: state
+    entity_id: !input home_weather
+  - trigger: state
+    entity_id: !input away_weather
+  - trigger: state
+    entity_id: !input presence_sensor
+  - trigger: time_pattern
+    minutes: /10
+
+variables:
+  v_pre: !input presence_sensor
+  v_home: !input home_weather
+  v_away: !input away_weather
+  v_prob: !input prob_threshold
+  v_cool: !input cooldown_minutes
+  v_crit: !input critical_alert
+  v_mem: !input signature_helper
+  v_wx: "{{ v_home if is_state(v_pre, 'on') else v_away }}"
+  v_kp: "{{ state_attr(v_wx, 'forecast_keypoint') or '' }}"
+  v_min: "{{ state_attr(v_wx, 'forecast_minutely') or '' }}"
+  v_alert: "{{ state_attr(v_wx, 'forecast_alert') }}"
+  v_probs: "{{ state_attr(v_wx, 'forecast_probability') or [] }}"
+  v_sig: >-
+    {%- set k = v_kp -%}
+    {%- set hit_rain = ('\u96e8' in k or '\u96ea' in k or '\u51b0\u96f9' in k)
+        and '\u4e0d\u4f1a' not in k and '\u65e0\u964d\u6c34' not in k -%}
+    {%- set pv = v_probs -%}
+    {%- set mx = (pv | map('float', 0) | list | max)
+        if (pv is iterable and pv is not string and pv | count > 0) else 0 -%}
+    {%- set hit_prob = ((mx * 100) if mx <= 1 else mx) >= (v_prob | float(60)) -%}
+    {%- set a = v_alert -%}
+    {%- set c = (a['content'] if 'content' in a else []) if a is mapping else [] -%}
+    {%- if c | count > 0 -%}
+    W:{{ (c[0]['title'] if 'title' in c[0] else 'warning') | truncate(120, true, '') }}
+    {%- elif hit_rain -%}
+    R
+    {%- elif hit_prob -%}
+    P
+    {%- endif -%}
+  v_last: >-
+    {%- set s = states(v_mem) | string -%}
+    {{ '' if s in ('unknown', 'unavailable', 'none', 'None') else s }}
+
+condition:
+  - condition: template
+    value_template: >-
+      {%- set sig = v_sig | string | trim -%}
+      {%- set last = v_last | string | trim -%}
+      {%- set lt = this.attributes.get('last_triggered') if this else none -%}
+      {%- set cool = true if lt is none
+          else (((now() - lt).total_seconds() / 60) >= (v_cool | float(15))) -%}
+      {{ (sig != last) and not (sig == '' and last == '') and cool }}
+
+actions:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ (v_sig | string).startswith('W:') }}"
+        sequence:
+          - action: !input notify_service
+            data:
+              title: "Weather Warning"
+              message: >-
+                {%- set a = v_alert -%}
+                {%- set c = (a['content'] if 'content' in a else []) if a is mapping else [] -%}
+                {%- if c | count > 0 -%}
+                {%- set f = c[0] -%}
+                {{ f['title'] if 'title' in f else 'Weather warning'
+                }}{{ (': ' ~ f['description']) if 'description' in f else '' }}
+                {%- else -%}
+                Weather warning issued.
+                {%- endif -%}
+              data:
+                push:
+                  interruption-level: "{{ 'critical' if v_crit else 'time-sensitive' }}"
+      - conditions:
+          - condition: template
+            value_template: "{{ (v_sig | string) == 'R' }}"
+        sequence:
+          - action: !input notify_service
+            data:
+              title: "Rain Alert"
+              message: "{{ v_kp or v_min or 'Rain detected nearby. Bring an umbrella.' }}"
+              data:
+                push:
+                  interruption-level: time-sensitive
+      - conditions:
+          - condition: template
+            value_template: "{{ (v_sig | string) == 'P' }}"
+        sequence:
+          - action: !input notify_service
+            data:
+              title: "Rain Likely"
+              message: >-
+                {%- set pv = v_probs -%}
+                {%- set mx = (pv | map('float', 0) | list | max)
+                    if (pv is iterable and pv is not string and pv | count > 0) else 0 -%}
+                {%- set pct = (((mx * 100) if mx <= 1 else mx) | round(0)) | int -%}
+                {{ v_min or 'Rain possible soon.' }}{{ ' (' ~ pct ~ '%)' if pct else '' }}
+              data:
+                push:
+                  interruption-level: time-sensitive
+  # Always store the current signature, pushed or not. When the rain stops or
+  # the warning is lifted the helper is reset to empty, so the next shower counts
+  # as a new situation and notifies again.
+  - action: input_text.set_value
+    data:
+      entity_id: !input signature_helper
+      value: "{{ (v_sig | string | trim)[:250] }}"

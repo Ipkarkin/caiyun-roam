@@ -1,0 +1,12 @@
+{
+  "domain": "caiyun_roam",
+  "name": "Caiyun Roam",
+  "codeowners": ["@talosip"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/talosip/caiyun-roam",
+  "issue_tracker": "https://github.com/talosip/caiyun-roam/issues",
+  "iot_class": "cloud_polling",
+  "requirements": [],
+  "version": "1.0.0"
+}

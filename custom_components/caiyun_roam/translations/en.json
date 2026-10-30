@@ -1,0 +1,40 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Caiyun Roam",
+        "description": "Follow a device's GPS and report Caiyun weather for that location.",
+        "data": {
+          "api_key": "Caiyun API key",
+          "tracker_entity": "Tracker entity (device_tracker / person)",
+          "name": "Name",
+          "interval": "Update interval (minutes)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to Caiyun",
+      "invalid_auth": "Invalid API key",
+      "rate_limited": "Rate limited by Caiyun, try later"
+    },
+    "abort": {
+      "already_configured": "This tracker is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "api_key": "Caiyun API key",
+          "tracker_entity": "Tracker entity (device_tracker / person)",
+          "interval": "Update interval (minutes)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to Caiyun",
+      "invalid_auth": "Invalid API key",
+      "rate_limited": "Rate limited by Caiyun, try later"
+    }
+  }
+}
