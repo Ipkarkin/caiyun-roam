@@ -14,7 +14,7 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
 import homeassistant.helpers.config_validation as cv
 
-from .const import CONF_TRACKER, DEFAULT_INTERVAL, DEFAULT_NAME, DOMAIN
+from .const import CONF_PRESENCE, CONF_TRACKER, DEFAULT_INTERVAL, DEFAULT_NAME, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,6 +23,9 @@ STEP_USER_SCHEMA = vol.Schema(
         vol.Required(CONF_API_KEY): cv.string,
         vol.Required(CONF_TRACKER): selector.EntitySelector(
             selector.EntitySelectorConfig(domain=["device_tracker", "person"])
+        ),
+        vol.Optional(CONF_PRESENCE): selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="binary_sensor")
         ),
         vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
         vol.Optional("interval", default=DEFAULT_INTERVAL): vol.All(
@@ -36,6 +39,9 @@ OPTIONS_SCHEMA = vol.Schema(
         vol.Required(CONF_API_KEY): cv.string,
         vol.Required(CONF_TRACKER): selector.EntitySelector(
             selector.EntitySelectorConfig(domain=["device_tracker", "person"])
+        ),
+        vol.Optional(CONF_PRESENCE): selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="binary_sensor")
         ),
         vol.Optional("interval", default=DEFAULT_INTERVAL): vol.All(
             vol.Coerce(int), vol.Range(min=1, max=120)
@@ -116,6 +122,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             {
                 CONF_API_KEY: cur.get(CONF_API_KEY, ""),
                 CONF_TRACKER: cur.get(CONF_TRACKER),
+                CONF_PRESENCE: self._entry.options.get(
+                    CONF_PRESENCE, cur.get(CONF_PRESENCE)
+                ),
                 "interval": self._entry.options.get(
                     "interval", cur.get("interval", DEFAULT_INTERVAL)
                 ),

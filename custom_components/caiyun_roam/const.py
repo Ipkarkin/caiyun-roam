@@ -4,6 +4,7 @@ DOMAIN = "caiyun_roam"
 DEFAULT_NAME = "Caiyun Roam"
 DEFAULT_INTERVAL = 5  # minutes
 CONF_TRACKER = "tracker_entity"
+CONF_PRESENCE = "presence_entity"  # optional: skip polling while this is "on" (home)
 API_BASE = "https://api.caiyunapp.com/v2.5"
 ATTRIBUTION = "Data provided by Colorfulclouds"
 
